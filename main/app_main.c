@@ -133,7 +133,7 @@ void app_main()
     
     for (int i=0; i<BITPLANE_CNT; i++) {
         for (int j=0; j<2; j++) {
-            bitplane[j][i]=heap_caps_malloc(BITPLANE_SZ*2, MALLOC_CAP_DMA);
+            bitplane[j][i]=heap_caps_malloc(BITPLANE_SZ*sizeof(uint16_t), MALLOC_CAP_DMA);
             assert(bitplane[j][i] && "Can't allocate bitplane memory");
         }
     }
@@ -153,7 +153,7 @@ void app_main()
         //Insert the plane
         for (int j=0; j<2; j++) {
             bufdesc[j][i].memory=bitplane[j][ch];
-            bufdesc[j][i].size=BITPLANE_SZ*2;
+            bufdesc[j][i].size=BITPLANE_SZ*sizeof(uint16_t);
         }
         //Magic to make sure we choose this bitplane an appropriate time later next time
         times[ch]+=(1<<(BITPLANE_CNT-ch));
