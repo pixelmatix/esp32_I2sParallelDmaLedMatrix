@@ -142,14 +142,16 @@ void i2s_parallel_setup(i2s_dev_t *dev, const i2s_parallel_config_t *cfg) {
     dev->sample_rate_conf.rx_bits_mod=cfg->bits;
     dev->sample_rate_conf.tx_bits_mod=cfg->bits;
     dev->sample_rate_conf.rx_bck_div_num=4; //ToDo: Unsure about what this does...
-    dev->sample_rate_conf.tx_bck_div_num=4;
+    //dev->sample_rate_conf.tx_bck_div_num=4;
+    dev->sample_rate_conf.tx_bck_div_num=1; // datasheet says this must be 2 or greater (but 1 seems to work)
     
     dev->clkm_conf.val=0;
     dev->clkm_conf.clka_en=0;
     dev->clkm_conf.clkm_div_a=63;
     dev->clkm_conf.clkm_div_b=63;
     //We ignore the possibility for fractional division here.
-    dev->clkm_conf.clkm_div_num=80000000L/cfg->clkspeed_hz;
+    //dev->clkm_conf.clkm_div_num=80000000L/cfg->clkspeed_hz;
+    dev->clkm_conf.clkm_div_num=1; // datasheet says this must be 2 or greater (but lower values seem to work)
     
     dev->fifo_conf.val=0;
     dev->fifo_conf.rx_fifo_mod_force_en=1;
@@ -169,8 +171,10 @@ void i2s_parallel_setup(i2s_dev_t *dev, const i2s_parallel_config_t *cfg) {
     dev->conf_chan.rx_chan_mod=1;
     
     //Invert ws to be active-low... ToDo: make this configurable
-    dev->conf.tx_right_first=1;
-    dev->conf.rx_right_first=1;
+    //dev->conf.tx_right_first=1;
+    dev->conf.tx_right_first=0;
+    //dev->conf.rx_right_first=1;
+    dev->conf.rx_right_first=0;
     
     dev->timing.val=0;
     
