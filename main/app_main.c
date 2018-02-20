@@ -82,10 +82,6 @@ Note: Because every subframe contains one bit of grayscale information, they are
 */
 
 
-//My display has each row swapped with its neighbour (so the rows are 2-1-4-3-6-5-8-7-...). If your display
-//is more sane, uncomment this to get a good image.
-#define DISPLAY_ROWS_SWAPPED 1
-
 //This is the bit depth, per RGB subpixel, of the data that is sent to the display.
 //The effective bit depth (in computer pixel terms) is less because of the PWM correction. With
 //a bitplane count of 7, you should be able to reproduce an 16-bit image more or less faithfully, though.
@@ -191,13 +187,7 @@ void app_main()
                 if ((y-1)&2) lbits|=BIT_B;
                 if ((y-1)&4) lbits|=BIT_C;
                 if ((y-1)&8) lbits|=BIT_D;
-                for (int fx=0; fx<64; fx++) {
-#if DISPLAY_ROWS_SWAPPED
-                    int x=fx^1; //to correct for the fact that the stupid LED screen I have has each row swapped...
-#else
                     int x=fx;
-#endif
-
                     int v=lbits;
                     //Do not show image while the line bits are changing
                     if (fx<1 || fx>=brightness) v|=BIT_OE;
@@ -215,6 +205,13 @@ void app_main()
 
                     //Save the calculated value to the bitplane memory
                     *p++=v;
+                    //Save the calculated value to the bitplane memory in reverse order to account for I2S Tx FIFO mode1 ordering
+                    if(fx%2){
+                        *p=v;
+                        p+=2;
+                    } else {
+                        *(p+1) = v;
+                    }
                 }
             }
         }
