@@ -203,8 +203,6 @@ void app_main()
                     if (c2 & (mask<<8)) v|=BIT_G2;
                     if (c2 & (mask<<0)) v|=BIT_B2;
 
-                    //Save the calculated value to the bitplane memory
-                    *p++=v;
                     //Save the calculated value to the bitplane memory in reverse order to account for I2S Tx FIFO mode1 ordering
                     if(fx%2){
                         *p=v;
