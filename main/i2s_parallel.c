@@ -156,7 +156,7 @@ void i2s_parallel_setup(i2s_dev_t *dev, const i2s_parallel_config_t *cfg) {
     dev->fifo_conf.val=0;
     dev->fifo_conf.rx_fifo_mod_force_en=1;
     dev->fifo_conf.tx_fifo_mod_force_en=1;
-    dev->fifo_conf.tx_fifo_mod=1;
+    //dev->fifo_conf.tx_fifo_mod=1;
     dev->fifo_conf.tx_fifo_mod=1;
     dev->fifo_conf.rx_data_num=32; //Thresholds. 
     dev->fifo_conf.tx_data_num=32;
