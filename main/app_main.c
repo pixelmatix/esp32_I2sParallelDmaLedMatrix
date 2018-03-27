@@ -188,11 +188,12 @@ void app_main()
                 if ((y-1)&2) lbits|=BIT_B;
                 if ((y-1)&4) lbits|=BIT_C;
                 if ((y-1)&8) lbits|=BIT_D;
+                for (int fx=0; fx<64; fx++) {
                     int x=fx;
                     int v=lbits;
                     //Do not show image while the line bits are changing
                     if (fx<1 || fx>=brightness) v|=BIT_OE;
-                    if (fx==62) v|=BIT_LAT; //latch on second-to-last bit... why not last bit? Dunno, probably a timing thing.
+                    if (fx==64-1) v|=BIT_LAT; //latch on last bit
 
                     int c1, c2;
                     c1=getpixel(pix, x, y);
