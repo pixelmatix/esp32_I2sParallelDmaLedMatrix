@@ -131,32 +131,31 @@ Note: Because every subframe contains one bit of grayscale information, they are
 
 //Get a pixel from the image at pix, assuming the image is a 64x32 8R8G8B image
 //Returns it as an uint32 with the lower 24 bits containing the RGB values.
-static uint32_t getpixel(unsigned char *pix, int x, int y) {
-    unsigned char *p=pix+((x+y*64)*3);
+static uint32_t getpixel(const unsigned char *pix, int x, int y) {
+    const unsigned char *p=pix+((x+y*64)*3);
     return (p[0]<<16)|(p[1]<<8)|(p[2]);
 }
 
-void app_main()
-{
-    int brightness=16; //Change to set the global brightness of the display, range 1-63
-                       //Warning when set too high: Do not look into LEDs with remaining eye.
-    
-    i2s_parallel_buffer_desc_t bufdesc[2][1<<BITPLANE_CNT];
-    i2s_parallel_config_t cfg={
-        .gpio_bus={R1_PIN, G1_PIN, B1_PIN, R2_PIN, G2_PIN, B2_PIN, -1, -1, A_PIN, B_PIN, C_PIN, D_PIN, LAT_PIN, OE_PIN, -1, -1},
-        .gpio_clk=CLK_PIN,
-        .bits=I2S_PARALLEL_BITS_16,
-        .clkspeed_hz=20*1000*1000,
-        .bufa=bufdesc[0],
-        .bufb=bufdesc[1],
-    };
+int brightness=16; //Change to set the global brightness of the display, range 1-63
+                   //Warning when set too high: Do not look into LEDs with remaining eye.
 
-    uint16_t *bitplane[ESP32_NUM_FRAME_BUFFERS][BITPLANE_CNT];
-    
+i2s_parallel_buffer_desc_t bufdesc[2][1<<BITPLANE_CNT];
+i2s_parallel_config_t cfg={
+    .gpio_bus={R1_PIN, G1_PIN, B1_PIN, R2_PIN, G2_PIN, B2_PIN, -1, -1, A_PIN, B_PIN, C_PIN, D_PIN, LAT_PIN, OE_PIN, -1, -1},
+    .gpio_clk=CLK_PIN,
+    .clkspeed_hz=20*1000*1000,
+    .bits=I2S_PARALLEL_BITS_16,
+    .bufa=bufdesc[0],
+    .bufb=bufdesc[1],
+};
+
+uint16_t *bitplane[ESP32_NUM_FRAME_BUFFERS][BITPLANE_CNT];
+
+void setup() {    
     for (int i=0; i<BITPLANE_CNT; i++) {
         for (int j=0; j<2; j++) {
             // sizeof() must be multiple of 32 bits, as DMA linked list buffer address pointer must be word-aligned.
-            bitplane[j][i]=heap_caps_malloc(BITPLANE_SZ*sizeof(uint16_t), MALLOC_CAP_DMA);
+            bitplane[j][i]=(uint16_t*)heap_caps_malloc(BITPLANE_SZ*sizeof(uint16_t), MALLOC_CAP_DMA);
             assert(bitplane[j][i] && "Can't allocate bitplane memory");
         }
     }
@@ -193,11 +192,14 @@ void app_main()
     printf("I2S setup done.\n");
 
     //We use GPIO0 (which usually has a button on it) to switch between animation and still.
-    gpio_set_direction(0, GPIO_MODE_DEF_INPUT);
-    gpio_pullup_en(0);
-    
-    int apos=0; //which frame in the animation we're on
-    int backbuf_id=0; //which buffer is the backbuffer, as in, which one is not active so we can write to it
+    gpio_set_direction(GPIO_NUM_0, GPIO_MODE_INPUT);
+    gpio_pullup_en(GPIO_NUM_0);
+}
+
+void loop() {
+    static int apos=0; //which frame in the animation we're on
+    static int backbuf_id=0; //which buffer is the backbuffer, as in, which one is not active so we can write to it
+
     while(1) {
         //Fill bitplanes with the data for the current image
         const uint8_t *pix=&anim[apos*64*32*3];     //pixel data for this animation frame
@@ -244,7 +246,7 @@ void app_main()
         //Bitplanes are updated, new image shows now.
         vTaskDelay(100 / portTICK_PERIOD_MS); //animation has an 100ms interval
 
-        if (gpio_get_level(0)) {
+        if (gpio_get_level(GPIO_NUM_0)) {
             //show next frame of Nyancat animation
             apos++;
             if (apos>=12) apos=0;
@@ -255,5 +257,13 @@ void app_main()
     }
 }
 
+#ifndef ARDUINO
 
+void app_main() {
+    setup();
 
+    while(1)
+        loop();
+}
+
+#endif
