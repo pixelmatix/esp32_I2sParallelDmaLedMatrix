@@ -133,6 +133,7 @@ void app_main()
     
     for (int i=0; i<BITPLANE_CNT; i++) {
         for (int j=0; j<2; j++) {
+            // sizeof() must be multiple of 32 bits, as DMA linked list buffer address pointer must be word-aligned.
             bitplane[j][i]=heap_caps_malloc(BITPLANE_SZ*sizeof(uint16_t), MALLOC_CAP_DMA);
             assert(bitplane[j][i] && "Can't allocate bitplane memory");
         }
