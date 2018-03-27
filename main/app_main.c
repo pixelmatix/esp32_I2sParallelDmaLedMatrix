@@ -221,7 +221,7 @@ void loop() {
 
                     int c1, c2;
                     c1=getpixel(pix, x, y);
-                    c2=getpixel(pix, x, y+16);
+                    c2=getpixel(pix, x, y+(matrixHeight/2));
                     if (c1 & (mask<<16)) v|=BIT_R1;
                     if (c1 & (mask<<8)) v|=BIT_G1;
                     if (c1 & (mask<<0)) v|=BIT_B1;
