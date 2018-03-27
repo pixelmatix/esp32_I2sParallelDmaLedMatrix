@@ -90,22 +90,39 @@ Note: Because every subframe contains one bit of grayscale information, they are
 //64*32 RGB leds, 2 pixels per 16-bit value...
 #define BITPLANE_SZ (64*32/2)
 
+// I2S Data Position Definitions
 //Upper half RGB
-#define BIT_R1 (1<<0)   //connected to GPIO2 here
-#define BIT_G1 (1<<1)   //connected to GPIO15 here
-#define BIT_B1 (1<<2)   //connected to GPIO4 here
+#define BIT_R1 (1<<0)   
+#define BIT_G1 (1<<1)   
+#define BIT_B1 (1<<2)   
 //Lower half RGB
-#define BIT_R2 (1<<3)   //connected to GPIO16 here
-#define BIT_G2 (1<<4)   //connected to GPIO27 here
-#define BIT_B2 (1<<5)   //connected to GPIO17 here
+#define BIT_R2 (1<<3)   
+#define BIT_G2 (1<<4)   
+#define BIT_B2 (1<<5)   
 
-#define BIT_A (1<<8)    //connected to GPIO5 here
-#define BIT_B (1<<9)    //connected to GPIO18 here
-#define BIT_C (1<<10)   //connected to GPIO19 here
-#define BIT_D (1<<11)   //connected to GPIO21 here
-#define BIT_LAT (1<<12) //connected to GPIO26 here
-#define BIT_OE (1<<13)  //connected to GPIO25 here
+#define BIT_A (1<<8)    
+#define BIT_B (1<<9)    
+#define BIT_C (1<<10)   
+#define BIT_D (1<<11)   
+#define BIT_LAT (1<<12) 
+#define BIT_OE (1<<13)  
 
+// Pin Definitions
+#define R1_PIN  2
+#define G1_PIN  15
+#define B1_PIN  4
+#define R2_PIN  16
+#define G2_PIN  27
+#define B2_PIN  17
+
+#define A_PIN   5
+#define B_PIN   18
+#define C_PIN   19
+#define D_PIN   21
+#define LAT_PIN 26
+#define OE_PIN  25
+
+#define CLK_PIN 22
 
 //Get a pixel from the image at pix, assuming the image is a 64x32 8R8G8B image
 //Returns it as an uint32 with the lower 24 bits containing the RGB values.
@@ -121,8 +138,8 @@ void app_main()
     
     i2s_parallel_buffer_desc_t bufdesc[2][1<<BITPLANE_CNT];
     i2s_parallel_config_t cfg={
-        .gpio_bus={2, 15, 4, 16, 27, 17, -1, -1, 5, 18, 19, 21, 26, 25, -1, -1},
-        .gpio_clk=22,
+        .gpio_bus={R1_PIN, G1_PIN, B1_PIN, R2_PIN, G2_PIN, B2_PIN, -1, -1, A_PIN, B_PIN, C_PIN, D_PIN, LAT_PIN, OE_PIN, -1, -1},
+        .gpio_clk=CLK_PIN,
         .bits=I2S_PARALLEL_BITS_16,
         .clkspeed_hz=20*1000*1000,
         .bufa=bufdesc[0],
