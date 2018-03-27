@@ -81,6 +81,11 @@ luminance correction is used. See val2pwm.c for more info.
 Note: Because every subframe contains one bit of grayscale information, they are also referred to as 'bitplanes' by the code below.
 */
 
+#define matrixHeight 32
+#define matrixWidth 32
+#define matrixRowsInParallel 2
+
+#define ESP32_NUM_FRAME_BUFFERS   2
 
 //This is the bit depth, per RGB subpixel, of the data that is sent to the display.
 //The effective bit depth (in computer pixel terms) is less because of the PWM correction. With
@@ -88,7 +93,7 @@ Note: Because every subframe contains one bit of grayscale information, they are
 #define BITPLANE_CNT 7
 
 //64*32 RGB leds, 2 pixels per 16-bit value...
-#define BITPLANE_SZ (64*32/2)
+#define BITPLANE_SZ (matrixWidth*matrixHeight/matrixRowsInParallel)
 
 // I2S Data Position Definitions
 //Upper half RGB
@@ -146,7 +151,7 @@ void app_main()
         .bufb=bufdesc[1],
     };
 
-    uint16_t *bitplane[2][BITPLANE_CNT];
+    uint16_t *bitplane[ESP32_NUM_FRAME_BUFFERS][BITPLANE_CNT];
     
     for (int i=0; i<BITPLANE_CNT; i++) {
         for (int j=0; j<2; j++) {
@@ -199,18 +204,18 @@ void app_main()
         for (int pl=0; pl<BITPLANE_CNT; pl++) {
             int mask=(1<<(8-BITPLANE_CNT+pl)); //bitmask for pixel data in input for this bitplane
             uint16_t *p=bitplane[backbuf_id][pl]; //bitplane location to write to
-            for (unsigned int y=0; y<16; y++) {
+            for (unsigned int y=0; y<matrixHeight/matrixRowsInParallel; y++) {
                 int lbits=0;                //Precalculate line bits of the *previous* line, which is the one we're displaying now
                 if ((y-1)&1) lbits|=BIT_A;
                 if ((y-1)&2) lbits|=BIT_B;
                 if ((y-1)&4) lbits|=BIT_C;
                 if ((y-1)&8) lbits|=BIT_D;
-                for (int fx=0; fx<64; fx++) {
+                for (int fx=0; fx<matrixWidth; fx++) {
                     int x=fx;
                     int v=lbits;
                     //Do not show image while the line bits are changing
                     if (fx<1 || fx>=brightness) v|=BIT_OE;
-                    if (fx==64-1) v|=BIT_LAT; //latch on last bit
+                    if (fx==matrixWidth-1) v|=BIT_LAT; //latch on last bit
 
                     int c1, c2;
                     c1=getpixel(pix, x, y);
