@@ -104,8 +104,13 @@ void i2s_parallel_setup(i2s_dev_t *dev, const i2s_parallel_config_t *cfg) {
     printf("Setting up parallel I2S bus at I2S%d\n", i2snum(dev));
     int sig_data_base, sig_clk;
     if (dev==&I2S0) {
-        sig_data_base=I2S0O_DATA_OUT0_IDX;
         sig_clk=I2S0O_WS_OUT_IDX;
+        if (cfg->bits==I2S_PARALLEL_BITS_32) {
+            sig_data_base=I2S0O_DATA_OUT0_IDX;
+        } else {
+            //Because of... reasons... the 16-bit values for i2s0 appear on d8...d23
+            sig_data_base=I2S0O_DATA_OUT8_IDX;
+        }
     } else {
         if (cfg->bits==I2S_PARALLEL_BITS_32) {
             sig_data_base=I2S1O_DATA_OUT0_IDX;
