@@ -153,11 +153,7 @@ void i2s_parallel_setup(i2s_dev_t *dev, const i2s_parallel_config_t *cfg) {
     //dev->clkm_conf.clkm_div_num=80000000L/cfg->clkspeed_hz;
     dev->clkm_conf.clkm_div_num=4; // datasheet says this must be 2 or greater (but lower values seem to work)
     
-    // this combination is 20MHz
-    //dev->sample_rate_conf.tx_bck_div_num=1; // datasheet says this must be 2 or greater (but 1 seems to work)
-    //dev->clkm_conf.clkm_div_num=2; // datasheet says this must be 2 or greater (but lower values seem to work)
-
-    // this combination results in 25MHz, why?
+    // this combination is 25MHz
     //dev->sample_rate_conf.tx_bck_div_num=1; // datasheet says this must be 2 or greater (but 1 seems to work)
     //dev->clkm_conf.clkm_div_num=2; // datasheet says this must be 2 or greater (but lower values seem to work)
 
