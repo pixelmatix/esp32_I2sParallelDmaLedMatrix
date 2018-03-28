@@ -81,9 +81,9 @@ luminance correction is used. See val2pwm.c for more info.
 Note: Because every subframe contains one bit of grayscale information, they are also referred to as 'bitplanes' by the code below.
 */
 
-#define matrixHeight 32
-#define matrixWidth 32
-#define matrixRowsInParallel 2
+#define matrixHeight            32
+#define matrixWidth             32
+#define matrixRowsInParallel    2
 
 #define ESP32_NUM_FRAME_BUFFERS   2
 
