@@ -86,11 +86,17 @@ Note: Because every subframe contains one bit of grayscale information, they are
 #define matrixRowsInParallel    2
 
 #define ESP32_NUM_FRAME_BUFFERS   2
+#define ESP32_OE_OFF_CLKS_AFTER_LATCH   1
 
 //This is the bit depth, per RGB subpixel, of the data that is sent to the display.
 //The effective bit depth (in computer pixel terms) is less because of the PWM correction. With
 //a bitplane count of 7, you should be able to reproduce an 16-bit image more or less faithfully, though.
 #define BITPLANE_CNT 7
+
+// LSBMSB_TRANSITION_BIT defines the color bit that is refreshed once per frame, with the same brightness as the bits above it
+// when LSBMSB_TRANSITION_BIT is non-zero, all color bits below it will be be refreshed only once, with fractional brightness, saving RAM and speeding up refresh
+// LSBMSB_TRANSITION_BIT must be < BITPLANE_CNT
+#define LSBMSB_TRANSITION_BIT   1
 
 //64*32 RGB leds, 2 pixels per 16-bit value...
 #define BITPLANE_SZ (matrixWidth*matrixHeight/matrixRowsInParallel)
@@ -129,6 +135,19 @@ Note: Because every subframe contains one bit of grayscale information, they are
 
 #define CLK_PIN 22
 
+// note: sizeof(data) must be multiple of 32 bits, as DMA linked list buffer address pointer must be word-aligned.
+typedef struct rowBitStruct {
+    uint16_t data[matrixWidth];
+} rowBitStruct;
+
+typedef struct rowDataStruct {
+    rowBitStruct rowbits[BITPLANE_CNT];
+} rowDataStruct;
+
+typedef struct frameStruct {
+    rowDataStruct rowdata[matrixHeight/matrixRowsInParallel];
+} frameStruct;
+
 //Get a pixel from the image at pix, assuming the image is a 64x32 8R8G8B image
 //Returns it as an uint32 with the lower 24 bits containing the RGB values.
 static uint32_t getpixel(const unsigned char *pix, int x, int y) {
@@ -136,55 +155,62 @@ static uint32_t getpixel(const unsigned char *pix, int x, int y) {
     return (p[0]<<16)|(p[1]<<8)|(p[2]);
 }
 
-int brightness=16; //Change to set the global brightness of the display, range 1-63
+int brightness=16; //Change to set the global brightness of the display, range 1-matrixWidth
                    //Warning when set too high: Do not look into LEDs with remaining eye.
 
-i2s_parallel_buffer_desc_t bufdesc[2][1<<BITPLANE_CNT];
+// TODO: find more efficient way of signaling the end of the buffer description than adding two extra rows
+i2s_parallel_buffer_desc_t bufdesc[2][matrixHeight/matrixRowsInParallel + 1][1<<(BITPLANE_CNT - LSBMSB_TRANSITION_BIT - 1)];
+
 i2s_parallel_config_t cfg={
     .gpio_bus={R1_PIN, G1_PIN, B1_PIN, R2_PIN, G2_PIN, B2_PIN, -1, -1, A_PIN, B_PIN, C_PIN, D_PIN, LAT_PIN, OE_PIN, -1, -1},
     .gpio_clk=CLK_PIN,
     .clkspeed_hz=20*1000*1000,
     .bits=I2S_PARALLEL_BITS_16,
-    .bufa=bufdesc[0],
-    .bufb=bufdesc[1],
+    .bufa=bufdesc[0][0],
+    .bufb=bufdesc[1][0],
 };
 
-uint16_t *bitplane[ESP32_NUM_FRAME_BUFFERS][BITPLANE_CNT];
+// pixel data is organized from LSB to MSB sequentially by row, from row 0 to row matrixHeight/matrixRowsInParallel (two rows of pixels are refreshed in parallel)
+frameStruct *bitplane;
 
 void setup() {    
-    for (int i=0; i<BITPLANE_CNT; i++) {
-        for (int j=0; j<2; j++) {
-            // sizeof() must be multiple of 32 bits, as DMA linked list buffer address pointer must be word-aligned.
-            bitplane[j][i]=(uint16_t*)heap_caps_malloc(BITPLANE_SZ*sizeof(uint16_t), MALLOC_CAP_DMA);
-            assert(bitplane[j][i] && "Can't allocate bitplane memory");
-        }
-    }
 
-    //Do binary time division setup. Essentially, we need n of plane 0, 2n of plane 1, 4n of plane 2 etc, but that
-    //needs to be divided evenly over time to stop flicker from happening. This little bit of code tries to do that
-    //more-or-less elegantly.
-    int times[BITPLANE_CNT]={0};
-    printf("Bitplane order: ");
-    for (int i=0; i<((1<<BITPLANE_CNT)-1); i++) {
-        int ch=0;
-        //Find plane that needs insertion the most
-        for (int j=0; j<BITPLANE_CNT; j++) {
-            if (times[j]<=times[ch]) ch=j;
+    bitplane=(frameStruct *)heap_caps_malloc(sizeof(frameStruct) * ESP32_NUM_FRAME_BUFFERS, MALLOC_CAP_DMA);
+    assert("Can't allocate bitplane memory");
+
+    //printf("allocated %d latches per row \r\n", 1<<(BITPLANE_CNT - LSBMSB_TRANSITION_BIT - 1));
+
+    for(int j=0; j<matrixWidth/matrixRowsInParallel; j++) {
+        // first set of data is LSB through MSB, single pass - all color bits are displayed once, which takes care of everything below and inlcluding LSBMSB_TRANSITION_BIT
+        bufdesc[0][j][0].memory = bitplane[0].rowdata[j].rowbits[0].data; 
+        bufdesc[0][j][0].size = sizeof(rowBitStruct) * BITPLANE_CNT;
+        bufdesc[1][j][0].memory = bitplane[1].rowdata[j].rowbits[0].data; 
+        bufdesc[1][j][0].size = sizeof(rowBitStruct) * BITPLANE_CNT;
+
+        int nextBufdescIndex = 1;
+
+        //printf("row %d: \r\n", j);
+
+        for(int i=LSBMSB_TRANSITION_BIT + 1; i<BITPLANE_CNT; i++) {
+            // binary time division setup: we need 2 of bit (LSBMSB_TRANSITION_BIT + 1) four of (LSBMSB_TRANSITION_BIT + 2), etc
+            // because we sweep through to MSB each time, it divides the number of times we have to sweep in half (saving linked list RAM)
+            // we need 2^(i - LSBMSB_TRANSITION_BIT - 1) == 1 << (i - LSBMSB_TRANSITION_BIT - 1) passes from i to MSB
+            //printf("buffer %d: repeat %d times, size: %d, from %d - %d\r\n", nextBufdescIndex, 1<<(i - LSBMSB_TRANSITION_BIT - 1), (BITPLANE_CNT - i), i, BITPLANE_CNT-1);
+
+            for(int k=0; k < 1<<(i - LSBMSB_TRANSITION_BIT - 1); k++) {
+                bufdesc[0][j][nextBufdescIndex].memory = bitplane[0].rowdata[j].rowbits[i].data;
+                bufdesc[0][j][nextBufdescIndex].size = sizeof(rowBitStruct) * (BITPLANE_CNT - i);
+                bufdesc[1][j][nextBufdescIndex].memory = bitplane[1].rowdata[j].rowbits[i].data;
+                bufdesc[1][j][nextBufdescIndex].size = sizeof(rowBitStruct) * (BITPLANE_CNT - i);
+                nextBufdescIndex++;
+                //printf("i %d, j %d, k %d\r\n", i, j, k);
+            }
         }
-        printf("%d ", ch);
-        //Insert the plane
-        for (int j=0; j<2; j++) {
-            bufdesc[j][i].memory=bitplane[j][ch];
-            bufdesc[j][i].size=BITPLANE_SZ*sizeof(uint16_t);
-        }
-        //Magic to make sure we choose this bitplane an appropriate time later next time
-        times[ch]+=(1<<(BITPLANE_CNT-ch));
     }
-    printf("\n");
 
     //End markers
-    bufdesc[0][((1<<BITPLANE_CNT)-1)].memory=NULL;
-    bufdesc[1][((1<<BITPLANE_CNT)-1)].memory=NULL;
+    bufdesc[0][matrixHeight/matrixRowsInParallel][0].memory=NULL;
+    bufdesc[1][matrixHeight/matrixRowsInParallel][0].memory=NULL;
 
     //Setup I2S
     i2s_parallel_setup(&I2S1, &cfg);
@@ -203,25 +229,59 @@ void loop() {
     while(1) {
         //Fill bitplanes with the data for the current image
         const uint8_t *pix=&anim[apos*64*32*3];     //pixel data for this animation frame
-        for (int pl=0; pl<BITPLANE_CNT; pl++) {
-            int mask=(1<<(8-BITPLANE_CNT+pl)); //bitmask for pixel data in input for this bitplane
-            uint16_t *p=bitplane[backbuf_id][pl]; //bitplane location to write to
-            for (unsigned int y=0; y<matrixHeight/matrixRowsInParallel; y++) {
-                int lbits=0;                //Precalculate line bits of the *previous* line, which is the one we're displaying now
-                if ((y-1)&1) lbits|=BIT_A;
-                if ((y-1)&2) lbits|=BIT_B;
-                if ((y-1)&4) lbits|=BIT_C;
-                if ((y-1)&8) lbits|=BIT_D;
+        for (unsigned int y=0; y<matrixHeight/matrixRowsInParallel; y++) {
+            for (int pl=0; pl<BITPLANE_CNT; pl++) {
+                uint16_t *p=bitplane[backbuf_id].rowdata[y].rowbits[pl].data; //bitplane location to write to
+                int mask=(1<<(8-BITPLANE_CNT+pl)); //bitmask for pixel data in input for this bitplane
+                int lbits=0;                //Precalculate line bits of the current line, which is the one we're displaying now
+                int rowAddress = y;
+
+                // normally output current rows ADDX, special case for LSB, output previous row's ADDX (as previous row is being displayed for one latch cycle)
+                if(pl == 0)
+                    rowAddress = y-1;
+
+                if (rowAddress&1) lbits|=BIT_A;
+                if (rowAddress&2) lbits|=BIT_B;
+                if (rowAddress&4) lbits|=BIT_C;
+                if (rowAddress&8) lbits|=BIT_D;
                 for (int fx=0; fx<matrixWidth; fx++) {
                     int x=fx;
                     int v=lbits;
                     //Do not show image while the line bits are changing
-                    if (fx<1 || fx>=brightness) v|=BIT_OE;
+                    if (fx<ESP32_OE_OFF_CLKS_AFTER_LATCH || fx >= (matrixWidth-1)) v|=BIT_OE;
+
+                    // turn off OE after brightness value is reached - used for MSBs and LSB
+                    // MSBs always output normal brightness
+                    // LSB outputs normal brightness as MSB from previous row is being displayed
+                    if((pl > LSBMSB_TRANSITION_BIT || !pl) && fx > brightness + ESP32_OE_OFF_CLKS_AFTER_LATCH) v|=BIT_OE;
+
+                    // special case for the bits *after* LSB through (LSBMSB_TRANSITION_BIT) - OE is output after data is shifted, so need to set OE to fractional brightness
+                    if(pl && pl <= LSBMSB_TRANSITION_BIT) {
+                        // divide brightness in half for each bit below LSBMSB_TRANSITION_BIT
+                        int lsbBrightness = brightness >> (LSBMSB_TRANSITION_BIT - pl + 1);
+                        if(fx > lsbBrightness + ESP32_OE_OFF_CLKS_AFTER_LATCH) v|=BIT_OE;
+                    }
+
                     if (fx==matrixWidth-1) v|=BIT_LAT; //latch on last bit
 
                     int c1, c2;
+#if 1
                     c1=getpixel(pix, x, y);
                     c2=getpixel(pix, x, y+(matrixHeight/2));
+#else
+                    uint32_t testpixel = 0xFFFFFFFF;
+                    //uint32_t testpixel = 0x7F7F7F7F;
+                    //uint32_t testpixel = 0x80808080;
+
+                    if((31 - x) == y)
+                        c1=testpixel;
+                    else
+                        c1 = 0x00;
+                    if((31 - x) == y+16)
+                        c2=testpixel;
+                    else
+                        c2 = 0x00;
+#endif
                     if (c1 & (mask<<16)) v|=BIT_R1;
                     if (c1 & (mask<<8)) v|=BIT_G1;
                     if (c1 & (mask<<0)) v|=BIT_B1;

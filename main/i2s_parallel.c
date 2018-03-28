@@ -55,6 +55,7 @@ static void fill_dma_desc(volatile lldesc_t *dmadesc, i2s_parallel_buffer_desc_t
     for (int i=0; bufdesc[i].memory!=NULL; i++) {
         int len=bufdesc[i].size;
         uint8_t *data=(uint8_t*)bufdesc[i].memory;
+        //printf("fill_dma_desc: n %d data %x size %d\n", n, (uint32_t)bufdesc[i].memory, bufdesc[i].size);
         while(len) {
             int dmalen=len;
             if (dmalen>DMA_MAX) dmalen=DMA_MAX;
