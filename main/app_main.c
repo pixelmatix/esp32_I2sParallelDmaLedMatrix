@@ -180,7 +180,7 @@ void setup() {
 
     //printf("allocated %d latches per row \r\n", 1<<(BITPLANE_CNT - LSBMSB_TRANSITION_BIT - 1));
 
-    for(int j=0; j<matrixWidth/matrixRowsInParallel; j++) {
+    for(int j=0; j<matrixHeight/matrixRowsInParallel; j++) {
         // first set of data is LSB through MSB, single pass - all color bits are displayed once, which takes care of everything below and inlcluding LSBMSB_TRANSITION_BIT
         bufdesc[0][j][0].memory = bitplane[0].rowdata[j].rowbits[0].data; 
         bufdesc[0][j][0].size = sizeof(rowBitStruct) * BITPLANE_CNT;
